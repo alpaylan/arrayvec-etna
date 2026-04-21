@@ -1,0 +1,71 @@
+# ETNA workload index for arrayvec.
+#
+# One [[variant]] per injected mutation. Source of truth for variant->property
+# mapping. Every other fact is derivable from the source tree:
+#   - marauders list --path .                      (inline marauder mutations)
+#   - ls patches/*.patch                           (patch-based variants; none yet)
+#   - grep -rn "pub fn property_" src/etna.rs      (property functions)
+#   - grep -rn "fn witness_.*_case_" tests/        (witness tests)
+#
+# Base commit for this workload is HEAD of master on this tree. Every
+# etna/<variant> branch is master + exactly one marauder converted to its
+# functional form.
+#
+# Candidate commits dropped from this workload (terminal reasons):
+#   - 27401fbc "Fix miri error in extend_zst"             → detection requires miri
+#   - c094906a "Fix mutable reborrow in retain"           → detection requires miri
+#   - c9ff5794 "Fix stacked borrows violations"           → detection requires miri
+#   - 9beb7534 "fix aliasing in drain_range"              → detection requires miri
+#   - f40e708f "truncate: no raw pointer from self"       → detection requires miri
+#   - 2a339799 ".extend() for ZST"                        → detection requires miri (ZST len)
+#   - 9f578790 "UB in DerefMut of ArrayString"            → detection requires miri
+#   - dc33f756 "track_caller"                             → observability-only, no behavior change
+#   - 812c83a2 "16-bit lengths on 16-bit targets"         → not reachable on 64-bit host
+#   - 0fdf39f1 "debug-assert into_inner_unchecked"        → unsafe API; no public invariant change
+#   - b7f3aa9f "new_const"                                → API addition, not a bug
+#   - b82a6d49 "retain optimization const-generic switch" → no behavior change
+#   - 090a5c50 "encode_utf8 uninit pointer"               → surface removed, const-generic rewrite
+#   - all pre-const-generic (< late 2020) commits         → surface removed by const-generic
+#                                                           migration of the entire Array trait
+
+name = "arrayvec"
+language = "Rust"
+
+[workload]
+name = "arrayvec"
+crate = "arrayvec"
+language = "rust"
+description = """
+ETNA workload for the Rust `arrayvec` crate. Each variant re-introduces
+one historical bug-fix into a fresh patched branch and pairs it with a
+framework-neutral property, four PBT adapters, and a deterministic
+witness test.
+"""
+
+[runner]
+bin = "etna"
+cargo_features = ["etna"]
+
+[[variant]]
+name = "extend_silent_truncate_a554ea2_1"
+property = "extend_panics_on_overflow"
+injection = "marauders"
+source_commit = "a554ea219a181f74542c5aaaeccec97a52f51939"
+witnesses = [
+    "witness_extend_panics_on_overflow_case_five_items_cap_four",
+    "witness_extend_panics_on_overflow_case_exact_fit",
+]
+frameworks = ["proptest", "quickcheck", "crabcheck", "hegel"]
+files = ["src/arrayvec.rs"]
+
+[[variant]]
+name = "insert_bound_off_by_one_2a1378d_1"
+property = "insert_at_length_succeeds"
+injection = "marauders"
+source_commit = "2a1378d3eb073026468063fd354d90511b61def0"
+witnesses = [
+    "witness_insert_at_length_succeeds_case_empty",
+    "witness_insert_at_length_succeeds_case_three_elements",
+]
+frameworks = ["proptest", "quickcheck", "crabcheck", "hegel"]
+files = ["src/arrayvec.rs"]

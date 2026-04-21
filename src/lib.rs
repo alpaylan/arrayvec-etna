@@ -64,6 +64,9 @@ mod char;
 mod errors;
 mod utils;
 
+#[cfg(feature="etna")]
+pub mod etna;
+
 pub use crate::array_string::ArrayString;
 pub use crate::errors::CapacityError;
 
