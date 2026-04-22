@@ -1,71 +1,129 @@
-# ETNA workload index for arrayvec.
-#
-# One [[variant]] per injected mutation. Source of truth for variant->property
-# mapping. Every other fact is derivable from the source tree:
-#   - marauders list --path .                      (inline marauder mutations)
-#   - ls patches/*.patch                           (patch-based variants; none yet)
-#   - grep -rn "pub fn property_" src/etna.rs      (property functions)
-#   - grep -rn "fn witness_.*_case_" tests/        (witness tests)
-#
-# Base commit for this workload is HEAD of master on this tree. Every
-# etna/<variant> branch is master + exactly one marauder converted to its
-# functional form.
-#
-# Candidate commits dropped from this workload (terminal reasons):
-#   - 27401fbc "Fix miri error in extend_zst"             → detection requires miri
-#   - c094906a "Fix mutable reborrow in retain"           → detection requires miri
-#   - c9ff5794 "Fix stacked borrows violations"           → detection requires miri
-#   - 9beb7534 "fix aliasing in drain_range"              → detection requires miri
-#   - f40e708f "truncate: no raw pointer from self"       → detection requires miri
-#   - 2a339799 ".extend() for ZST"                        → detection requires miri (ZST len)
-#   - 9f578790 "UB in DerefMut of ArrayString"            → detection requires miri
-#   - dc33f756 "track_caller"                             → observability-only, no behavior change
-#   - 812c83a2 "16-bit lengths on 16-bit targets"         → not reachable on 64-bit host
-#   - 0fdf39f1 "debug-assert into_inner_unchecked"        → unsafe API; no public invariant change
-#   - b7f3aa9f "new_const"                                → API addition, not a bug
-#   - b82a6d49 "retain optimization const-generic switch" → no behavior change
-#   - 090a5c50 "encode_utf8 uninit pointer"               → surface removed, const-generic rewrite
-#   - all pre-const-generic (< late 2020) commits         → surface removed by const-generic
-#                                                           migration of the entire Array trait
-
 name = "arrayvec"
-language = "Rust"
-
-[workload]
-name = "arrayvec"
-crate = "arrayvec"
-language = "rust"
 description = """
 ETNA workload for the Rust `arrayvec` crate. Each variant re-introduces
 one historical bug-fix into a fresh patched branch and pairs it with a
 framework-neutral property, four PBT adapters, and a deterministic
 witness test.
 """
+language = "rust"
+crate = "arrayvec"
+base_commit = "2d005c25f655241206c340c5f2c74873051bcd5e"
 
-[runner]
-bin = "etna"
-cargo_features = ["etna"]
+[[tasks]]
+mutations = ["extend_silent_truncate_a554ea2_1"]
 
-[[variant]]
-name = "extend_silent_truncate_a554ea2_1"
-property = "extend_panics_on_overflow"
-injection = "marauders"
-source_commit = "a554ea219a181f74542c5aaaeccec97a52f51939"
-witnesses = [
-    "witness_extend_panics_on_overflow_case_five_items_cap_four",
-    "witness_extend_panics_on_overflow_case_exact_fit",
-]
-frameworks = ["proptest", "quickcheck", "crabcheck", "hegel"]
+[tasks.source]
+repo = "https://github.com/bluss/arrayvec"
+commits = ["a554ea219a181f74542c5aaaeccec97a52f51939"]
+commit_subjects = ["API: Panic in .extend() and from_iter on capacity exceeded"]
+summary = "`.extend()` and `from_iter` silently truncated the iterator once the `ArrayVec` hit capacity, contradicting the documented behaviour of panicking on overflow. The fix routes both paths through `extend_panic()` when the backing buffer is full."
+
+[tasks.injection]
+kind = "marauders"
 files = ["src/arrayvec.rs"]
+locations = [{ file = "src/arrayvec.rs", line = 1143, symbol = "extend_from_iter" }]
 
-[[variant]]
-name = "insert_bound_off_by_one_2a1378d_1"
-property = "insert_at_length_succeeds"
-injection = "marauders"
-source_commit = "2a1378d3eb073026468063fd354d90511b61def0"
+[tasks.bug]
+short_name = "extend_silent_truncate"
+invariant = """
+`ArrayVec::extend` must panic when the iterator yields more items than the vector's remaining capacity; truncating silently is a data-loss bug visible to callers that rely on the documented "panic on overflow" behaviour.
+"""
+how_triggered = "replacing `if ptr == end_ptr && CHECK { extend_panic(); }` with `if ptr == end_ptr && CHECK { return; }` makes the extend loop bail out silently once the backing buffer is full. Witness `case_five_items_cap_four` drives this by extending a capacity-4 `ArrayVec` with a 5-element iterator: base build panics as expected; the buggy build truncates to 4 elements and returns normally, and the property reports `vec.len()=4` without a panic observation. The `case_exact_fit` witness guards against over-correction — 4 items must still succeed."
+
+[[tasks.tasks]]
+property = "ExtendPanicsOnOverflow"
 witnesses = [
-    "witness_insert_at_length_succeeds_case_empty",
-    "witness_insert_at_length_succeeds_case_three_elements",
+  { test_fn = "witness_extend_panics_on_overflow_case_five_items_cap_four" },
+  { test_fn = "witness_extend_panics_on_overflow_case_exact_fit" },
 ]
-frameworks = ["proptest", "quickcheck", "crabcheck", "hegel"]
+
+[[tasks]]
+mutations = ["insert_bound_off_by_one_2a1378d_1"]
+
+[tasks.source]
+repo = "https://github.com/bluss/arrayvec"
+commits = ["2a1378d3eb073026468063fd354d90511b61def0"]
+commit_subjects = ["Fix bounds checking in ArrayVec::insert(index, element)"]
+summary = "`try_insert` rejected `index == len` (the valid append position) with an out-of-range panic instead of pushing to the tail, diverging from `Vec::insert`'s contract. The fix loosens the guard from `index >= len` to `index > len` while adding a separate capacity check."
+
+[tasks.injection]
+kind = "marauders"
 files = ["src/arrayvec.rs"]
+locations = [{ file = "src/arrayvec.rs", line = 310, symbol = "try_insert" }]
+
+[tasks.bug]
+short_name = "insert_bound_off_by_one"
+invariant = "`ArrayVec::try_insert(len, v)` must behave as a push-to-tail — index `== len` is a valid append position per the docs, matching `Vec::insert`'s contract. The buggy boundary check rejects this call with a panic as if the index were out of range."
+how_triggered = "the base code tests `if index > self.len() { panic_oob!(...) }`; the mutation restores the pre-2a1378d condition `if index >= self.len() { panic_oob!(...) }`, which treats the append position as out-of-bounds. `witness_case_empty` (insert at 0 into an empty vec) and `witness_case_three_elements` (insert at 3 into a 3-element vec) both hit the boundary and panic under the buggy code where the base succeeds."
+
+[[tasks.tasks]]
+property = "InsertAtLengthSucceeds"
+witnesses = [
+  { test_fn = "witness_insert_at_length_succeeds_case_empty" },
+  { test_fn = "witness_insert_at_length_succeeds_case_three_elements" },
+]
+
+[[dropped]]
+commit = "27401fbc"
+subject = "Fix miri error in extend_zst"
+reason = "detection requires miri"
+
+[[dropped]]
+commit = "c094906a"
+subject = "Fix mutable reborrow in retain"
+reason = "detection requires miri"
+
+[[dropped]]
+commit = "c9ff5794"
+subject = "Fix stacked borrows violations"
+reason = "detection requires miri"
+
+[[dropped]]
+commit = "9beb7534"
+subject = "fix aliasing in drain_range"
+reason = "detection requires miri"
+
+[[dropped]]
+commit = "f40e708f"
+subject = "truncate: no raw pointer from self"
+reason = "detection requires miri"
+
+[[dropped]]
+commit = "2a339799"
+subject = ".extend() for ZST"
+reason = "detection requires miri (ZST len)"
+
+[[dropped]]
+commit = "9f578790"
+subject = "UB in DerefMut of ArrayString"
+reason = "detection requires miri"
+
+[[dropped]]
+commit = "dc33f756"
+subject = "track_caller"
+reason = "observability-only, no behavior change"
+
+[[dropped]]
+commit = "812c83a2"
+subject = "16-bit lengths on 16-bit targets"
+reason = "not reachable on 64-bit host"
+
+[[dropped]]
+commit = "0fdf39f1"
+subject = "debug-assert into_inner_unchecked"
+reason = "unsafe API; no public invariant change"
+
+[[dropped]]
+commit = "b7f3aa9f"
+subject = "new_const"
+reason = "API addition, not a bug"
+
+[[dropped]]
+commit = "b82a6d49"
+subject = "retain optimization const-generic switch"
+reason = "no behavior change"
+
+[[dropped]]
+commit = "090a5c50"
+subject = "encode_utf8 uninit pointer"
+reason = "surface removed, const-generic rewrite"

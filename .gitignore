@@ -14,3 +14,6 @@
 # ETNA runtime artifacts (local state only — not part of the workload source)
 /.hegel/
 /progress.jsonl
+/.marauders/
+/.migration-cache/
+/etna.log
