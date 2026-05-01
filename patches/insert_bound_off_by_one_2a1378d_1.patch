@@ -1,0 +1,15 @@
+# marauders: name=insert_bound_off_by_one
+diff --git a/src/arrayvec.rs b/src/arrayvec.rs
+--- a/src/arrayvec.rs
++++ b/src/arrayvec.rs
+@@ -307,8 +307,8 @@
+     ///
+     /// ```
+     pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), CapacityError<T>> {
+-        if index > self.len() {            panic_oob!("try_insert", index, self.len())
+-        }
++        if index >= self.len() {            panic_oob!("try_insert", index, self.len())
++        }
+ 
+         if self.len() == self.capacity() {
+             return Err(CapacityError::new(element));

@@ -1,0 +1,13 @@
+# marauders: name=extend_silent_truncate
+diff --git a/src/arrayvec.rs b/src/arrayvec.rs
+--- a/src/arrayvec.rs
++++ b/src/arrayvec.rs
+@@ -1133,7 +1133,7 @@
+         let mut iter = iterable.into_iter();
+         loop {
+             if let Some(elt) = iter.next() {
+-                if ptr == end_ptr && CHECK { extend_panic(); }
++                if ptr == end_ptr && CHECK { return; }
+                 debug_assert_ne!(ptr, end_ptr);
+                 if mem::size_of::<T>() != 0 {
+                     ptr.write(elt);
