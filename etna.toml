@@ -20,7 +20,8 @@ commit_subjects = ["API: Panic in .extend() and from_iter on capacity exceeded"]
 summary = "`.extend()` and `from_iter` silently truncated the iterator once the `ArrayVec` hit capacity, contradicting the documented behaviour of panicking on overflow. The fix routes both paths through `extend_panic()` when the backing buffer is full."
 
 [tasks.injection]
-kind = "marauders"
+kind = "patch"
+patch = "patches/extend_silent_truncate_a554ea2_1.patch"
 files = ["src/arrayvec.rs"]
 locations = [{ file = "src/arrayvec.rs", line = 1143, symbol = "extend_from_iter" }]
 
@@ -48,7 +49,8 @@ commit_subjects = ["Fix bounds checking in ArrayVec::insert(index, element)"]
 summary = "`try_insert` rejected `index == len` (the valid append position) with an out-of-range panic instead of pushing to the tail, diverging from `Vec::insert`'s contract. The fix loosens the guard from `index >= len` to `index > len` while adding a separate capacity check."
 
 [tasks.injection]
-kind = "marauders"
+kind = "patch"
+patch = "patches/insert_bound_off_by_one_2a1378d_1.patch"
 files = ["src/arrayvec.rs"]
 locations = [{ file = "src/arrayvec.rs", line = 310, symbol = "try_insert" }]
 

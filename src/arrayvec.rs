@@ -307,15 +307,8 @@ impl<T, const CAP: usize> ArrayVec<T, CAP> {
     ///
     /// ```
     pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), CapacityError<T>> {
-        /*| insert_bound_off_by_one */
         if index > self.len() {            panic_oob!("try_insert", index, self.len())
         }
-        /*|| insert_bound_off_by_one_2a1378d_1 */
-        /*|
-        if index >= self.len() {            panic_oob!("try_insert", index, self.len())
-        }
-        */
-        /* |*/
 
         if self.len() == self.capacity() {
             return Err(CapacityError::new(element));
@@ -1140,13 +1133,7 @@ impl<T, const CAP: usize> ArrayVec<T, CAP> {
         let mut iter = iterable.into_iter();
         loop {
             if let Some(elt) = iter.next() {
-                /*| extend_silent_truncate */
                 if ptr == end_ptr && CHECK { extend_panic(); }
-                /*|| extend_silent_truncate_a554ea2_1 */
-                /*|
-                if ptr == end_ptr && CHECK { return; }
-                */
-                /* |*/
                 debug_assert_ne!(ptr, end_ptr);
                 if mem::size_of::<T>() != 0 {
                     ptr.write(elt);
