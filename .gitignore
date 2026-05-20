@@ -17,3 +17,8 @@
 /.marauders/
 /.migration-cache/
 /etna.log
+
+# etna runtime artifacts (auto-added)
+/coverage/
+*.profraw
+/profdata/
